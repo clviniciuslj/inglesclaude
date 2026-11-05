@@ -199,6 +199,67 @@ printf 'storePassword = providers.environmentVariable("X").get()\n' > "$with_env
 expect_ok "senha lida de variável de ambiente é aceita" run_hygiene "$with_env_password"
 
 # ======================================================================================
+echo "== setup-android-sdk.sh =="
+sdk2="$work/sdk2"
+mkdir -p "$sdk2/cmdline-tools/latest/bin" "$sdk2/platforms"
+cat > "$sdk2/cmdline-tools/latest/bin/sdkmanager" <<'FAKE_SDKMANAGER'
+#!/usr/bin/env bash
+# sdkmanager falso: reproduz o comportamento real de recusar pacotes que não existem.
+case " $* " in
+  *" --licenses "*)
+    head -n 1 > /dev/null   # o sdkmanager real também encerra depois das respostas
+    exit 0 ;;
+  *" --list_installed "*)
+    echo "Installed packages:"
+    exit 0 ;;
+  *" --list "*)
+    echo "Installed packages:"
+    echo "  Path | Version | Description | Location"
+    echo "  ------- | ------- | ------- | -------"
+    for p in ${FAKE_PLATFORMS:-}; do printf '  %s | 1 | Android SDK Platform | platforms/x\n' "$p"; done
+    echo "Available Packages:"
+    echo "  platforms;android-37.0-ext99 | 1 | extensão | platforms/y"
+    exit 0 ;;
+  *" --install "*)
+    for arg in "$@"; do
+      case "$arg" in
+        platforms\;*)
+          found=0
+          for p in ${FAKE_PLATFORMS:-}; do [ "$p" = "$arg" ] && found=1; done
+          if [ "$found" -eq 0 ]; then
+            echo "Warning: Failed to find package '$arg'" >&2
+            exit 1
+          fi ;;
+      esac
+    done
+    echo "$*" >> "${FAKE_INSTALL_LOG:?}"
+    exit 0 ;;
+esac
+exit 1
+FAKE_SDKMANAGER
+chmod +x "$sdk2/cmdline-tools/latest/bin/sdkmanager"
+
+sdk_setup() { # $1 = plataformas disponíveis (ids separados por espaço)
+  rm -f "$work/install.log"
+  env ANDROID_HOME="$sdk2" PATH="$sdk2/cmdline-tools/latest/bin:$PATH" \
+    FAKE_PLATFORMS="$1" FAKE_INSTALL_LOG="$work/install.log" "$root/scripts/setup-android-sdk.sh"
+}
+
+expect_ok "API 37 com nome 'android-37.0' (o caso real do runner) é instalada" sdk_setup "platforms;android-36 platforms;android-37.0"
+if grep -q 'platforms;android-37\.0' "$work/install.log" 2>/dev/null; then
+  ok "o sdkmanager recebe exatamente platforms;android-37.0"
+else
+  bad "o sdkmanager recebe exatamente platforms;android-37.0"
+fi
+expect_ok "API 37 com nome antigo 'android-37' também funciona" sdk_setup "platforms;android-37"
+if grep -q 'platforms;android-37 \|platforms;android-37$' "$work/install.log" 2>/dev/null; then
+  ok "o sdkmanager recebe platforms;android-37 quando é o nome existente"
+else
+  bad "o sdkmanager recebe platforms;android-37 quando é o nome existente"
+fi
+expect_fail "sem a plataforma pedida, falha com erro claro" sdk_setup "platforms;android-36"
+expect_fail "variante -ext não é aceita no lugar da plataforma" sdk_setup ""
+
 echo ""
 echo "Resultado: ${passed} ok, ${failed} falha(s)."
 [ "$failed" -eq 0 ]

@@ -27,8 +27,20 @@ echo "sdkmanager: $sdkmanager"
 # O 'yes' recebe SIGPIPE quando o sdkmanager termina; isso não é um erro.
 yes 2>/dev/null | "$sdkmanager" --sdk_root="$sdk_root" --licenses >/dev/null || true
 
-"$sdkmanager" --sdk_root="$sdk_root" --install \
-  "platform-tools" "platforms;android-${COMPILE_SDK}" "build-tools;${BUILD_TOOLS}"
+# O nome do pacote da plataforma mudou: até a API 36 era "platforms;android-36"; a partir da 37 é
+# "platforms;android-37.0". Em vez de supor, procura o nome real na lista do sdkmanager.
+available="$("$sdkmanager" --sdk_root="$sdk_root" --list 2>/dev/null || true)"
+platform_pkg="$(awk -v re="^platforms;android-${COMPILE_SDK}([.]0)?\$" '$1 ~ re { print $1; exit }' <<<"$available")"
+if [ -z "$platform_pkg" ]; then
+  echo "::error title=Plataforma do Android::Não encontrei platforms;android-${COMPILE_SDK} (nem ${COMPILE_SDK}.0) na lista do sdkmanager. Plataformas conhecidas:"
+  awk '$1 ~ /^platforms;android-[0-9.]+$/ { print "  " $1 }' <<<"$available" >&2
+  exit 1
+fi
+echo "Plataforma escolhida: $platform_pkg"
 
+"$sdkmanager" --sdk_root="$sdk_root" --install "platform-tools" "$platform_pkg" "build-tools;${BUILD_TOOLS}"
+
+echo "== Plataformas em $sdk_root/platforms =="
+ls -1 "$sdk_root/platforms"
 echo "== Componentes instalados (primeiras linhas) =="
 "$sdkmanager" --sdk_root="$sdk_root" --list_installed | sed -n '1,40p'
