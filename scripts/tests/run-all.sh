@@ -142,12 +142,25 @@ exit 1
 FAKE_AAPT2
 cat > "$tools/apksigner" <<'FAKE_APKSIGNER'
 #!/usr/bin/env bash
+# apksigner falso. O formato PADRÃO é o real, copiado da saída do apksigner no CI do GitHub
+# (build-tools 37): "V2 Signer: certificate SHA-256 digest: ...". FAKE_FORMAT=legacy imita o
+# formato antigo ("Signer #1 certificate ..."). FAKE_NO_SHA=1 omite a linha do SHA-256.
+dn="${FAKE_DN:-CN=English Lab, OU=Uso pessoal, O=clviniciuslj, C=BR}"
+sha="${FAKE_SHA:-aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899}"
 echo "Verifies"
+echo "Verified using v1 scheme (JAR signing): false"
 echo "Verified using v2 scheme (APK Signature Scheme v2): true"
+echo "Verified using v3 scheme (APK Signature Scheme v3): false"
 echo "Number of signers: 1"
-echo "Signer #1 certificate DN: ${FAKE_DN:-CN=English Lab, OU=Uso pessoal, O=clviniciuslj, C=BR}"
-echo "Signer #1 certificate SHA-256 digest: ${FAKE_SHA:-aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899}"
-echo "Signer #1 certificate SHA-1 digest: 0123456789abcdef0123456789abcdef01234567"
+if [ "${FAKE_FORMAT:-}" = "legacy" ]; then
+  echo "Signer #1 certificate DN: $dn"
+  [ "${FAKE_NO_SHA:-}" = "1" ] || echo "Signer #1 certificate SHA-256 digest: $sha"
+  echo "Signer #1 certificate SHA-1 digest: 0123456789abcdef0123456789abcdef01234567"
+else
+  echo "V2 Signer: certificate DN: $dn"
+  [ "${FAKE_NO_SHA:-}" = "1" ] || echo "V2 Signer: certificate SHA-256 digest: $sha"
+  echo "V2 Signer: certificate SHA-1 digest: 291d8ebff06e6f2b981b825a6a3af84509ebef0b"
+fi
 FAKE_APKSIGNER
 chmod +x "$tools/aapt2" "$tools/apksigner"
 echo "apk de mentira" > "$work/app.apk"
@@ -165,6 +178,16 @@ expect_ok "certificado esperado (formato do keytool, com dois-pontos e maiúscul
   ANDROID_HOME="$sdk" "$root/scripts/verify-apk.sh" "$work/app.apk" --stable-signature
 expect_fail "certificado diferente do esperado é reprovado" \
   env EXPECTED_CERT_SHA256="00:11:22" ANDROID_HOME="$sdk" "$root/scripts/verify-apk.sh" "$work/app.apk" --stable-signature
+expect_fail "certificado diferente do esperado (formato real) com dois certificados parecidos é reprovado" \
+  env FAKE_SHA=aabbccddeeff00112233445566778899aabbccddeeff00112233445566778800 \
+  EXPECTED_CERT_SHA256="AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99" \
+  ANDROID_HOME="$sdk" "$root/scripts/verify-apk.sh" "$work/app.apk" --stable-signature
+expect_ok "formato antigo do apksigner (Signer #1) também é lido" \
+  env FAKE_FORMAT=legacy \
+  EXPECTED_CERT_SHA256="AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99" \
+  ANDROID_HOME="$sdk" "$root/scripts/verify-apk.sh" "$work/app.apk" --stable-signature
+expect_fail "saída do apksigner sem SHA-256 legível é erro (não passa em silêncio)" \
+  env FAKE_NO_SHA=1 ANDROID_HOME="$sdk" "$root/scripts/verify-apk.sh" "$work/app.apk" --stable-signature
 expect_fail "arquivo inexistente é erro de uso" env ANDROID_HOME="$sdk" "$root/scripts/verify-apk.sh" "$work/nao-existe.apk"
 
 # ======================================================================================
@@ -197,6 +220,48 @@ expect_fail "senha fixa no Gradle é reprovada" run_hygiene "$with_password"
 with_env_password="$(new_repo senha-env)"
 printf 'storePassword = providers.environmentVariable("X").get()\n' > "$with_env_password/build.gradle.kts"
 expect_ok "senha lida de variável de ambiente é aceita" run_hygiene "$with_env_password"
+
+# ======================================================================================
+echo "== check-room-schemas.sh =="
+new_schema_repo() { # $1 = nome; cria um repositório com um esquema commitado (sem quebra de linha final)
+  local dir="$work/schema-$1"
+  mkdir -p "$dir/scripts" "$dir/app/schemas/db"
+  cp "$root/scripts/check-room-schemas.sh" "$dir/scripts/"
+  git -C "$dir" init -q
+  printf '{\n  "formatVersion": 1,\n  "database": {\n    "version": 1\n  }\n}' > "$dir/app/schemas/db/1.json"
+  git -C "$dir" add -A
+  git -C "$dir" -c user.name=teste -c user.email=teste@example.com commit -q -m base
+  echo "$dir"
+}
+run_schema_check() { (cd "$1" && ./scripts/check-room-schemas.sh); }
+
+schema_ok="$(new_schema_repo igual)"
+expect_ok "esquema idêntico ao commitado passa" run_schema_check "$schema_ok"
+
+schema_newline="$(new_schema_repo newline)"
+printf '\n' >> "$schema_newline/app/schemas/db/1.json"
+expect_ok "quebra de linha final extra não reprova (comparação semântica)" run_schema_check "$schema_newline"
+
+schema_compact="$(new_schema_repo compacto)"
+jq -c . "$schema_compact/app/schemas/db/1.json" > "$schema_compact/tmp.json" && mv "$schema_compact/tmp.json" "$schema_compact/app/schemas/db/1.json"
+expect_ok "mesmo JSON com outra formatação não reprova" run_schema_check "$schema_compact"
+
+schema_changed="$(new_schema_repo mudou)"
+printf '{\n  "formatVersion": 1,\n  "database": {\n    "version": 2\n  }\n}' > "$schema_changed/app/schemas/db/1.json"
+expect_fail "esquema com conteúdo diferente do commitado reprova" run_schema_check "$schema_changed"
+
+schema_new="$(new_schema_repo novo)"
+printf '{\n  "formatVersion": 1,\n  "database": {\n    "version": 2\n  }\n}' > "$schema_new/app/schemas/db/2.json"
+expect_fail "esquema novo não commitado reprova" run_schema_check "$schema_new"
+if (cd "$schema_new" && ./scripts/check-room-schemas.sh 2>&1 || true) | grep -q '"version": 2'; then
+  ok "ao reprovar, o conteúdo do esquema novo é impresso para ser commitado"
+else
+  bad "ao reprovar, o conteúdo do esquema novo é impresso para ser commitado"
+fi
+
+schema_missing="$(new_schema_repo ausente)"
+rm -rf "$schema_missing/app/schemas"
+expect_fail "pasta app/schemas ausente reprova" run_schema_check "$schema_missing"
 
 # ======================================================================================
 echo "== setup-android-sdk.sh =="

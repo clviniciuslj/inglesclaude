@@ -52,18 +52,7 @@ jobs:
 
       - name: Conferir que os esquemas do Room estão commitados
         if: ${{ !cancelled() }}
-        run: |
-          changed="$(git status --porcelain --untracked-files=all -- app/schemas)"
-          if [ -n "$changed" ]; then
-            echo "::error title=Esquemas do Room desatualizados::Faça commit de app/schemas (conteúdo impresso abaixo)."
-            echo "$changed"
-            echo "$changed" | awk '{print $2}' | while read -r file; do
-              echo "----- $file"
-              cat "$file"
-            done
-            exit 1
-          fi
-          echo "OK: app/schemas está em dia."
+        run: scripts/check-room-schemas.sh
 
       - name: Guardar relatórios em caso de falha
         if: failure()

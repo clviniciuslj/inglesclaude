@@ -55,8 +55,15 @@ version_code="$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" <<<"$badging")"
 echo "== Assinatura =="
 cert_info="$("$apksigner" verify --verbose --print-certs "$apk")"
 sed -n '1,12p' <<<"$cert_info"
-cert_dn="$(awk -F': ' '/certificate DN/ {print $2; exit}' <<<"$cert_info")"
-cert_sha256="$(awk -F': ' '/certificate SHA-256 digest/ {print tolower($2); exit}' <<<"$cert_info")"
+# O apksigner imprime "V2 Signer: certificate DN: ..." (formato atual, visto no CI) ou
+# "Signer #1 certificate DN: ..." (formato antigo). O prefixo varia, então pega tudo o que vem
+# depois de "certificate DN: " e de "certificate SHA-256 digest: ".
+cert_dn="$(awk '/certificate DN: / { sub(/.*certificate DN: /, ""); print; exit }' <<<"$cert_info")"
+cert_sha256="$(awk '/certificate SHA-256 digest: / { sub(/.*certificate SHA-256 digest: /, ""); gsub(/[[:space:]]/, ""); print tolower($0); exit }' <<<"$cert_info")"
+if ! grep -Eq '^[0-9a-f]{64}$' <<<"$cert_sha256"; then
+  echo "::error title=Certificado ilegível::Não consegui ler o SHA-256 do certificado na saída do apksigner."
+  exit 1
+fi
 apk_sha256="$(sha256sum "$apk" | cut -d' ' -f1)"
 apk_size="$(du -h "$apk" | cut -f1)"
 
