@@ -1,0 +1,161 @@
+name: Build
+
+# Pull requests e verificações compilam SEM acesso a segredos (job "verify").
+# O APK assinado só é gerado na branch main ou em execução manual sobre a main (job "signed-apk"),
+# dentro do ambiente "release-signing", que o GitHub restringe à branch main.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    name: Verificar (testes, lint e compilação, sem segredos)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Higiene do repositório (nenhuma chave ou senha versionada)
+        run: scripts/check-repo-hygiene.sh
+
+      - name: Configurar o JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Configurar o Android SDK
+        run: scripts/setup-android-sdk.sh
+
+      - name: Testes dos scripts de CI (assinatura e verificações)
+        run: scripts/tests/run-all.sh
+
+      - name: Testes, lint e APK de debug
+        run: ./gradlew --no-daemon :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
+
+      - name: Conferir o APK (sem permissão de internet)
+        run: scripts/verify-apk.sh app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Conferir que os esquemas do Room estão commitados
+        run: |
+          changed="$(git status --porcelain --untracked-files=all -- app/schemas)"
+          if [ -n "$changed" ]; then
+            echo "::error title=Esquemas do Room desatualizados::Faça commit de app/schemas (conteúdo impresso abaixo)."
+            echo "$changed"
+            echo "$changed" | awk '{print $2}' | while read -r file; do
+              echo "----- $file"
+              cat "$file"
+            done
+            exit 1
+          fi
+          echo "OK: app/schemas está em dia."
+
+      - name: Guardar relatórios em caso de falha
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: relatorios-de-falha
+          path: |
+            **/build/reports/**
+            **/build/test-results/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+  signed-apk:
+    name: APK assinado (somente main)
+    needs: verify
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: release-signing
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Configurar o JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Configurar o Android SDK
+        run: scripts/setup-android-sdk.sh
+
+      - name: Preparar a chave de assinatura
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Assinatura não configurada::O ambiente release-signing não tem os secrets da chave. Nenhum APK foi gerado. Veja docs/ASSINATURA.md."
+            {
+              echo "### APK assinado NÃO foi gerado"
+              echo ""
+              echo "O ambiente \`release-signing\` ainda não tem a chave de assinatura."
+              echo "Siga \`docs/ASSINATURA.md\` e depois rode este workflow de novo (Actions → Build → Run workflow, na main)."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          umask 077
+          keystore_path="$RUNNER_TEMP/englishlab-release.p12"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$keystore_path"
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+          echo "path=$keystore_path" >> "$GITHUB_OUTPUT"
+
+      - name: Compilar o APK assinado
+        if: steps.signing.outputs.configured == 'true'
+        env:
+          ENGLISHLAB_KEYSTORE_PATH: ${{ steps.signing.outputs.path }}
+          ENGLISHLAB_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          ENGLISHLAB_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          ENGLISHLAB_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew --no-daemon :app:assembleDebug -PrequireStableSigning=true --stacktrace
+
+      - name: Conferir assinatura e permissões
+        if: steps.signing.outputs.configured == 'true'
+        env:
+          EXPECTED_CERT_SHA256: ${{ vars.SIGNING_CERT_SHA256 }}
+        run: scripts/verify-apk.sh app/build/outputs/apk/debug/app-debug.apk --stable-signature
+
+      - name: Nomear o APK
+        if: steps.signing.outputs.configured == 'true'
+        id: apk
+        run: |
+          mkdir -p dist
+          apk_name="english-lab-build${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "dist/${apk_name}"
+          echo "name=${apk_name}" >> "$GITHUB_OUTPUT"
+
+      - name: Publicar o APK como artefato
+        if: steps.signing.outputs.configured == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: english-lab-apk-build${{ github.run_number }}
+          path: dist/${{ steps.apk.outputs.name }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remover a chave do runner
+        if: always()
+        run: rm -f "$RUNNER_TEMP/englishlab-release.p12"

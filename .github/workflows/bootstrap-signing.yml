@@ -1,0 +1,35 @@
+name: Configurar assinatura (uma vez)
+
+# Gera a chave de assinatura estável no runner e a grava nos secrets do ambiente "release-signing".
+# Só roda na main (e o ambiente também é restrito à main). Passo a passo em docs/ASSINATURA.md.
+on:
+  workflow_dispatch:
+    inputs:
+      rotate:
+        description: "Substituir a chave existente? (o app instalado NÃO poderá ser atualizado por cima)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    name: Gerar a chave e gravar nos secrets do ambiente
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: release-signing
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Gerar a chave e gravar os secrets
+        env:
+          GH_TOKEN: ${{ secrets.BOOTSTRAP_TOKEN }}
+          REPO: ${{ github.repository }}
+          ENV_NAME: release-signing
+          ROTATE: ${{ inputs.rotate }}
+        run: scripts/bootstrap-signing.sh
