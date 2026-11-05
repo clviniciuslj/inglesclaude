@@ -1,6 +1,6 @@
 # English Lab — Plano de arquitetura (Etapa 1)
 
-**Status:** proposta aguardando aprovação · **Data:** 05/11/2026 · **Escopo:** planejamento. Nenhum código do aplicativo foi escrito.
+**Status:** aprovado em 05/11/2026, com ajustes (seção 9) · **Escopo:** planejamento da Etapa 1; a implementação segue por entregas verificáveis (seção 7).
 
 Convenções propostas: interface e explicações em pt-BR; identificadores de código em inglês; comentários, KDoc e documentação em pt-BR. Este documento é atualizado a cada etapa; decisões arquiteturais importantes ficam registradas na seção 2.6.
 
@@ -15,7 +15,7 @@ Convenções propostas: interface e explicações em pt-BR; identificadores de c
 - **Arquitetura:** Kotlin + Compose + Material 3 + Room. Dois módulos Gradle (`:core` em Kotlin puro, `:app` Android). MVVM com fluxo unidirecional. DI manual. Conteúdo em JSON validado no CI e semeado no Room com IDs estáveis. Tentativas imutáveis e estado derivado recalculável.
 - **Pedagogia:** competências medidas por acerto **e retenção**; revisão espaçada (SM-2 adaptado); avaliação de 4 semanas por habilidade com limiares configuráveis; sessão diária de 45 min que se adapta ao que você precisa reforçar.
 - **Ambiente:** o sandbox desta sessão não alcança `dl.google.com`, então o app Android só compila no GitHub Actions (a lógica pura compila e testa aqui). O repositório remoto está vazio e o **push foi recusado (403)**: o app Claude do GitHub ainda não tem acesso de escrita. Isso precisa ser resolvido antes da Etapa 2 (decisão 1).
-- **Próximo passo:** sua aprovação (seção 8): seis decisões, cada uma com um padrão recomendado.
+- **Status:** plano aprovado em 05/11/2026, com ajustes (seção 9). A entrega 1 (APK base instalável) está em andamento; cada entrega só avança depois de validada.
 
 ---
 
@@ -41,9 +41,9 @@ Versões estáveis lidas hoje (a Etapa 2 fixa tudo em `gradle/libs.versions.toml
 | Kotlin | 2.4.21 | O compilador do Compose vem como plugin do próprio Kotlin |
 | KSP | 2.3.13 | Para o Room |
 | Coroutines | 1.11.0 | |
-| AGP | série 9.x | 9.0 exige Gradle ≥ 9.1, traz Kotlin embutido (sem plugin `kotlin-android`) e DSL nova. Tutoriais de AGP 8 não servem. Número exato fixado na Etapa 2 (o Google Maven não é acessível daqui). Plano B: última 8.x |
+| AGP | série 9.x; adotado 9.4.1 | 9.0 exige Gradle ≥ 9.1 (9.4 e 9.5 exigem ≥ 9.6), traz Kotlin embutido (sem plugin `kotlin-android`) e DSL nova. O 9.5.0 aparece nas notas, mas não confirmamos que seja final. Tutoriais de AGP 8 não servem. Plano B: última 8.x |
 | Compose / Material 3 | Compose 1.12.x; Material 3 1.4.0 (1.5 em beta) | BOM fixado na Etapa 2 |
-| Room | 2.8.x (2.8.4 foi a última estável que encontrei) | Room 3.0 ainda em RC: não usar |
+| Room | 2.8.5 (estável, 09/09/2026) | O Room 3 (`androidx.room3`, 3.0.3) já existe; mantemos o 2.x pela maturidade da API |
 | Navigation | Navigation 3 estável (1.2.0); Navigation Compose 2.x estável | Ver ADR-10 |
 | JUnit | 4.13.2 | Robolectric exige JUnit 4 |
 
@@ -104,6 +104,7 @@ Versões estáveis lidas hoje (a Etapa 2 fixa tudo em `gradle/libs.versions.toml
 6. **Limiares pedagógicos não calibrados.** Mitigação: tudo em `ProgressionPolicy`; calibrar com dados reais no primeiro checkpoint.
 7. **Compatibilidade de plugins com AGP 9** (KSP, Compose). Mitigação: fixar versões e validar no CI já na entrega 2.1; plano B: AGP 8.x.
 8. **Escopo.** Mitigação: regra “sem tela sem funcionalidade real”; cada aba só entra na barra quando funciona.
+9. **Verificação de desenvolvedor do Android no Brasil** (em vigor desde 30/09/2026). A instalação do APK fora da loja pode exigir o fluxo avançado (espera de 24 h) ou o registro gratuito do pacote. Mitigação: assinatura estável (necessária para registrar) e guia em `docs/INSTALACAO.md`.
 
 ---
 
@@ -644,9 +645,9 @@ A tela **Diagnóstico de voz** (em Configurações) faz: verificação de TTS (v
 
 ---
 
-## 8. Decisões pendentes
+## 8. Decisões (respondidas em 05/11/2026)
 
-A decisão 1 exige uma ação sua. Nas demais, responda “aprovado” para aceitar os padrões recomendados, ou indique o número da que quer mudar.
+As respostas e os ajustes estão na seção 9. O texto abaixo é o da proposta original.
 
 1. **Acesso ao GitHub e branch principal (pré-requisito).** O push desta sessão foi recusado (403): o app Claude do GitHub não tem acesso de escrita a `clviniciuslj/inglesclaude`. **Ação sua:** conectar ou reconectar o GitHub em <https://claude.ai/connect-github> e instalar o app Claude no repositório (ou pedir a um dono da organização). Se a sessão atual não enxergar o acesso novo, abra uma nova sessão com este repositório selecionado. Com o acesso resolvido, **recomendo:** eu enviar a branch `claude/english-lab-architecture-x02jkx` e criar `main` a partir dela (o remoto está vazio; assim o histórico fica compatível), você marcar `main` como padrão em *Configurações → Branches*, e todo trabalho seguir em branches `claude/*` com PR para `main`. Só abro PR quando você pedir.
 2. **Assinatura estável do APK** (para atualizar sem perder dados). **A)** keystore de *debug dedicado* versionado em `app/`: zero configuração; é chave pública por natureza, mas **contraria a sua regra de não versionar chaves**. **B)** Secrets do GitHub: mais limpo, mas exige gerar o keystore e cadastrar 4 secrets (difícil só pelo celular). **Recomendo A para o debug** e B (já documentada, Anexo B) para o release.
@@ -654,6 +655,49 @@ A decisão 1 exige uma ação sua. Nas demais, responda “aprovado” para acei
 4. **Escopo e ordem.** Aprovar: (a) os três ajustes da seção 7.1; (b) conteúdo em fatias, com o Ciclo 1 completo primeiro; (c) três adições mínimas que a especificação implica: **teste de nivelamento**, **exportar/importar progresso** e **diagnóstico de voz**.
 5. **CI e ambiente.** (a) Gatilhos: push em `main` + manual (como você pediu) **+ `pull_request` → `main`**. (b) Liberar `dl.google.com` na rede da sessão para eu compilar o `:app` localmente: peço na Etapa 2, com um cartão de aprovação.
 6. **Seu aparelho.** Modelo, versão do Android e idioma do sistema (definem `minSdk`, a prioridade do spike de voz e os cenários de teste).
+
+---
+
+## 9. Registro de aprovação e ajustes (05/11/2026)
+
+### 9.1 Respostas às decisões da seção 8
+
+| # | Decisão | Resposta |
+|---|---|---|
+| 1 | GitHub e branch principal | Você vai conectar o acesso e instalar o app Claude no repositório. Depois, eu crio `main` a partir da branch atual, preservando este documento e o histórico de commits. **Pendente:** o push ainda retorna 403. |
+| 2 | Assinatura estável | **Opção B (GitHub Secrets).** Nenhum keystore ou chave privada no repositório. Pull requests compilam sem acesso aos segredos; o APK assinado só é gerado em eventos autorizados (main e execução manual). Implementação em `docs/ASSINATURA.md` e `.github/workflows/`. |
+| 3 | Identificador | `io.github.clviniciuslj.englishlab` (aprovado). |
+| 4 | Ordem e escopo | Aprovados os três ajustes de ordem (7.1), o Ciclo 1 completo e as três adições: nivelamento, exportar/importar progresso e diagnóstico de voz. |
+| 5 | CI e ambiente | Gatilho `pull_request` → `main` aprovado. A liberação do `dl.google.com` ficou **pendente**: o cartão de aprovação não pôde ser exibido no app Claude do celular (precisa de app mais novo ou de claude.ai num computador). |
+| 6 | Aparelho | Samsung **SM-S938B** (Galaxy S25 Ultra), **Android 17**. O idioma do sistema ainda precisa ser confirmado. |
+
+### 9.2 Regras de condução definidas por você
+
+- A primeira entrega deve gerar um **APK funcional e instalável**, mesmo com poucas funcionalidades.
+- Depois, avançamos por etapas, **testando cada entrega antes de adicionar a próxima**.
+- Prioridades: **estabilidade, preservação dos dados e funcionamento offline**.
+- **Não avançar** para funcionalidades posteriores sem validar os critérios de aceite da etapa atual.
+
+### 9.3 Ajustes em relação à proposta original
+
+- **Assinatura por ambiente do GitHub.** Os secrets ficam no ambiente `release-signing`, restrito à branch `main` (o GitHub bloqueia qualquer outra branch, mesmo que alguém altere o workflow). O job que compila pull requests não referencia segredos. Como o celular não permite gerar a chave localmente, o workflow `bootstrap-signing.yml` gera o keystore dentro do runner e grava nos secrets, sem que a chave passe pelo repositório, pelo chat ou pelos logs.
+- **Versões:** AGP **9.4.1** (o 9.5.0 aparece nas notas, mas não confirmamos que seja final); Room **2.8.5** (o Room 3 já existe, mas mantemos o 2.x pela maturidade da API); KSP 2.3.10 (par documentado do Kotlin 2.4.21); `ubuntu-24.04` fixo no CI (a `ubuntu-latest` migra para a 26.04 em novembro de 2026); actions: checkout v7, setup-java v6, upload-artifact v7.
+- **Navegação** entra com a segunda tela real (diagnóstico de voz, entrega 2.4). A primeira entrega tem uma única tela: o Início de “estado do aplicativo”.
+- **Backup automático do Android desligado** (`allowBackup=false`) na primeira entrega: evita restaurações parciais de um banco em modo WAL. A exportação/importação explícita (entrega 5.5) é o caminho de backup.
+- **`versionCode` baseado no relógio** (minutos desde 01/01/2026): sempre crescente, para que toda atualização por cima seja aceita.
+- **Risco novo: verificação de desenvolvedor do Android (Brasil, desde 30/09/2026).** A documentação oficial é ambígua sobre APKs instalados direto; há três caminhos (tentar instalar; fluxo avançado com espera de 24 h; registro gratuito em conta de distribuição limitada). Detalhes em `docs/INSTALACAO.md`.
+
+### 9.4 Critérios de aceite da entrega 1 (APK base instalável)
+
+| # | Critério | Quem verifica |
+|---|---|---|
+| 1 | O job `verify` fica verde em pull request (testes de `:core` e do app, lint, APK sem permissão de internet) | Claude, pelos logs do Actions |
+| 2 | O APK assinado é gerado na `main`, com o mesmo SHA-256 de certificado em toda build | Claude (logs) e você (resumo da execução) |
+| 3 | O APK instala e abre no Galaxy S25 Ultra e mostra o Início com versão, build, data de criação dos dados, banco versão 1 e “sem permissão de internet” | Você |
+| 4 | Fechar e reabrir o app mantém a data de criação dos dados | Você |
+| 5 | Em modo avião o app abre e mostra o mesmo conteúdo | Você |
+| 6 | Uma segunda build instala **por cima** da primeira, sem desinstalar: a data de criação permanece e o número do build aumenta | Você |
+| 7 | O tema acompanha o modo claro/escuro do sistema | Você |
 
 ---
 

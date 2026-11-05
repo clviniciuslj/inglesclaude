@@ -1,0 +1,26 @@
+# Gradle / Kotlin
+.gradle/
+.kotlin/
+build/
+
+# Android / IDE
+local.properties
+.idea/
+*.iml
+captures/
+.cxx/
+.DS_Store
+
+# Artefatos de build (o APK vem do GitHub Actions, nunca do repositório)
+*.apk
+*.aab
+
+# NUNCA versionar chaves, keystores ou senhas de assinatura
+*.jks
+*.keystore
+*.p12
+*.pfx
+keystore.properties
+signing.properties
+.env
+.env.*

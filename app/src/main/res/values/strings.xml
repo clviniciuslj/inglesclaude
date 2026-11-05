@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">English Lab</string>
+
+    <string name="home_title">Início</string>
+    <string name="home_loading">Carregando…</string>
+
+    <string name="home_test_version_title">Versão de teste da estrutura</string>
+    <string name="home_test_version_body">Esta versão valida a base do aplicativo: instalação, armazenamento local e funcionamento offline. As funções de estudo chegam nas próximas entregas.</string>
+
+    <string name="home_state_title">Estado do aplicativo</string>
+    <string name="home_label_version">Versão instalada</string>
+    <string name="home_label_data_created">Dados locais criados em</string>
+    <string name="home_label_study_day">Dia de estudo</string>
+    <string name="home_label_daily_goal">Meta diária</string>
+    <string name="home_label_database">Banco de dados local</string>
+    <string name="home_label_internet">Internet</string>
+
+    <string name="home_value_version">%1$s · build %2$s · %3$s</string>
+    <string name="home_value_study_day">%1$s · dia %2$d de uso</string>
+    <string name="home_value_daily_goal">%1$d minutos</string>
+    <string name="home_value_database">versão %1$d do esquema</string>
+    <string name="home_value_internet_absent">O aplicativo não tem permissão de internet: funciona 100% offline.</string>
+    <string name="home_value_internet_present">Atenção: o aplicativo declara permissão de internet.</string>
+</resources>
