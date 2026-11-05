@@ -88,6 +88,16 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
+// Falhas de teste aparecem completas (com causa e pilha) no log do CI.
+tasks.withType<Test>().configureEach {
+    testLogging {
+        events("passed", "failed", "skipped")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showCauses = true
+        showStackTraces = true
+    }
+}
+
 dependencies {
     implementation(project(":core"))
 
