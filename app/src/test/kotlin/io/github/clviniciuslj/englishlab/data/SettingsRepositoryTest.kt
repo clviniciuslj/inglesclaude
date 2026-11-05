@@ -17,14 +17,13 @@ import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.annotation.Config
 
 /**
  * Garante o que mais importa na entrega 1: o dado do aluno é criado uma única vez
- * e sobrevive a fechar e reabrir o banco.
+ * e sobrevive a fechar e reabrir o banco. O SDK do Robolectric é definido em
+ * src/test/resources/robolectric.properties.
  */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [36])
 class SettingsRepositoryTest {
     private lateinit var context: Context
     private val openDatabases = mutableListOf<AppDatabase>()

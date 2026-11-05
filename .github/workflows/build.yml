@@ -45,12 +45,13 @@ jobs:
         run: scripts/tests/run-all.sh
 
       - name: Testes, lint e APK de debug
-        run: ./gradlew --no-daemon :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
+        run: ./gradlew --no-daemon --continue :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --stacktrace
 
       - name: Conferir o APK (sem permissão de internet)
         run: scripts/verify-apk.sh app/build/outputs/apk/debug/app-debug.apk
 
       - name: Conferir que os esquemas do Room estão commitados
+        if: ${{ !cancelled() }}
         run: |
           changed="$(git status --porcelain --untracked-files=all -- app/schemas)"
           if [ -n "$changed" ]; then
